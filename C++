@@ -89,7 +89,7 @@ int main(void)
 			max_arry[0][i]=i;
 			max_arry[1][i]= max[i];
 		}
-		for (int k = initial_X; k <src_width; k++)
+		for (int k = 0; k <src_width; k++)
 		{
 			Point rpt;
 			rpt.x = max_arry[0][k];             // max1[2 * k + 0];

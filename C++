@@ -1,0 +1,132 @@
+#include <opencv2\opencv.hpp>
+#include <iostream>
+#include <time.h>
+using namespace std;
+using namespace cv;
+void gamma_correct(Mat& img, Mat& dst, double gamma) {
+	Mat temp;
+	CvMat tmp;
+
+	img.convertTo(temp, CV_32FC1, 1.0 / 255.0, 0.0);
+	tmp = temp;
+	cvPow(&tmp, &tmp, gamma);
+	temp.convertTo(dst, CV_8UC1, 255.0, 0.0);
+}
+int main(void)
+{
+	int max[2000];
+	VideoCapture cap;
+	cap.open(0); //打开摄像头
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	//namedWindow(output_title, 0);
+	while (1)
+	{
+		Mat src1;
+		Mat src;
+		vector<int> max1;
+		int max_arry[2][1920] = {0};
+		//src1 = imread("./photo/34.bmp", 1);
+		//src1 = imread("./室外/2019-08-22-58.bmp", 1);
+		//src = src1;
+		cap >> src1; //读取当前帧
+		src = src1;
+		//double t = (double)getTickCount();
+		imshow("input image", src);
+		if (!src.data) {
+			printf("could not load image...\n");
+			return -1;
+		}
+		double t = 0;
+		t = (double)getTickCount();
+		int src_width  = src.cols;
+		int src_height = src.rows;
+		cvtColor(src, src, CV_BGR2GRAY);
+		//equalizeHist(src, src);
+		//imshow("直方图均衡化", gray);
+		//gamma_correct(src, src, 2.0);                                  //gamma用来对亮的进行加强，对暗的地方进行抑制
+		//imshow("伽马校正",src);
+		//erode(src_gray, src_gray, structureElement);
+		//Mat structureElement = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1, -1));
+		//dilate(src, src, structureElement); //膨胀
+		//erode(src, src, structureElement);  //腐蚀  腐蚀的效果在视频中还不错
+		//erode(src, src, structureElement);  //腐蚀
+		//erode(src, src, structureElement);  //腐蚀
+		//erode(src, src, structureElement);  //腐蚀
+		//GaussianBlur(src, src, Size(0, 0), 6, 6);  //视频中，高斯滤波效果还可以
+		//medianBlur(src, src, 3);//中值滤波，没必要
+		//imwrite("./photo/3_1.jpg", src);
+
+		int height = 400, width = 200;
+		int  initial_X = (src_width - width) / 2, initial_Y = 50;
+		Rect rect(initial_X, initial_Y, width, height);          //左上坐标（x,y）和矩形的长(x)宽(y)
+		rectangle(src1, rect, Scalar(255, 0, 0), 1, 1, 0);
+
+		//int th;
+		//Mat src2;
+		//th = threshold(src, src2, 0, 255, CV_THRESH_OTSU);    //大律法也可以考虑不再使用
+		////printf("th is:%d\n",th);
+		//imshow("大律法", src2);
+		//printf("cow and row is %d,%d\n", src.cols, src.rows);
+		//printf("灰度和画框：%f ms\n", (getTickCount() - t)*(1000) / getTickFrequency());
+		//t= (double)getTickCount();
+		uchar *pValue;
+		int value_store = 0;
+		for (int i = 0; i < src.cols; i++)                 //cols是列数，640
+		{
+			max[i] = 0;
+			value_store = 0;
+			pValue = src.ptr<uchar>(0);
+			for (int j = 0; j < src.rows; j++)            //rows是行，480  Mat访问坐标是x y反着写的。
+			{
+				//pValue = src.ptr<uchar>(j);
+				if ((pValue[i] >= value_store) && (pValue[i] > 150))
+				{
+					value_store = pValue[i];
+					max[i] = j;
+				}
+				pValue += src_width;
+			}
+			max_arry[0][i]=i;
+			max_arry[1][i]= max[i];
+		}
+		for (int k = initial_X; k <src_width; k++)
+		{
+			Point rpt;
+			rpt.x = max_arry[0][k];             // max1[2 * k + 0];
+			rpt.y = max_arry[1][k];             // max1[2 * k + 1];
+			circle(src1, rpt, 0, Scalar(0, 0, 255));
+		}
+		int Max_sopt[2][1080] = { 0 };      //分成(src_height-20)段,
+		int Max_order = 0;
+		int Max_store = 0;
+		int lengh = 20;                     //每段宽度是20个像素点,可以更改
+		for (int j = 0; j < (src_height- lengh); j++)
+		{
+			for (int i = initial_X; i <= width+ initial_X; i++)
+			{
+				if ((max_arry[1][i] > (j + lengh)) && (max_arry[1][i] <= (j + lengh*2)))
+				{
+					Max_sopt[0][j]++;                    //每个段的个数
+					Max_sopt[1][j] += max_arry[1][i];    //每个段的总和
+				}
+			}
+			if (Max_sopt[0][j]>Max_store )
+			{
+				Max_store = Max_sopt[0][j];
+				Max_order = j;                    //记录下哪一个段的点数最多
+			}
+		}
+		if ((Max_sopt[1][Max_order] > 0) && (Max_sopt[0][Max_order] > 0))
+			Max_sopt[1][Max_order] = Max_sopt[1][Max_order] / Max_sopt[0][Max_order];//得到平均值，可以画点
+		Point rpt2;
+		rpt2.x = width / 2 + initial_X;
+		rpt2.y = Max_sopt[1][Max_order];
+		circle(src1, rpt2, 10, Scalar(255, 0, 255));
+
+		imshow("result", src1);
+		printf("%f ms, X:%d,Y:%d\n", (getTickCount() - t)*(1000) / getTickFrequency(), rpt2.x, rpt2.y);
+		waitKey(60);
+	}
+	//system("pause");
+	return 0;
+}
